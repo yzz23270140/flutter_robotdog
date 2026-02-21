@@ -1,4 +1,6 @@
 // lib/live_player_widget.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -6,20 +8,28 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 class LivePlayerWidget extends StatefulWidget {
   final String serverIp;
   final double height;
-  const LivePlayerWidget({super.key, required this.serverIp, this.height = 200});
+
+  const LivePlayerWidget({
+    super.key,
+    required this.serverIp,
+    this.height = 200,
+  });
 
   @override
   State<LivePlayerWidget> createState() => _LivePlayerWidgetState();
 }
 
-class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBindingObserver {
+class _LivePlayerWidgetState extends State<LivePlayerWidget>
+    with WidgetsBindingObserver {
   VideoPlayerController? _controller;
+  Timer? _startupTimer;
+
   bool _useFlv = false;
   bool _isLoading = true;
   bool _hasError = false;
+  bool _isRecovering = false;
   String _errorMsg = '';
 
-  // 使用 widget.serverIp 而不是硬编码或错误的 ${...}
   String get _flvUrl => 'http://${widget.serverIp}:8080/live/camera.flv';
   String get _hlsUrl => 'http://${widget.serverIp}:8080/live/camera.m3u8';
 
@@ -27,45 +37,61 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBinding
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initPlayer();
+    unawaited(_initPlayer());
   }
 
   Future<void> _initPlayer() async {
-    _startPlay();
-    WakelockPlus.enable();
+    await _startPlay();
+    await WakelockPlus.enable();
   }
 
   Future<void> _startPlay() async {
-    setState(() { _isLoading = true; _hasError = false; });
+    _startupTimer?.cancel();
+
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMsg = '';
+    });
+
     try {
       final oldController = _controller;
       if (oldController != null) {
         oldController.removeListener(_playerListener);
         await oldController.dispose();
       }
-      
+
       final url = _useFlv ? _flvUrl : _hlsUrl;
       final nextController = VideoPlayerController.networkUrl(
         Uri.parse(url),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
+
       _controller = nextController;
-      
-      // 添加监听器
       nextController.addListener(_playerListener);
-      
-      // 初始化并自动播放
+
       await nextController.initialize();
       if (!mounted || _controller != nextController) {
         return;
       }
+
       await nextController.play();
+      if (!mounted) return;
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      _startupTimer = Timer(const Duration(seconds: 10), () {
+        _handleStartupTimeout(nextController);
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _hasError = true;
         _isLoading = false;
-        _errorMsg = '连接失败: $e\n建议先用 HLS（m3u8），FLV 在 video_player 上兼容性较差。';
+        _errorMsg = '连接失败: $e';
       });
     }
   }
@@ -74,18 +100,59 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBinding
     final controller = _controller;
     if (controller == null || !mounted) return;
 
-    if (controller.value.hasError) {
-      setState(() { _hasError = true; _isLoading = false; _errorMsg = '播放错误'; });
-    } else if (controller.value.isPlaying) {
-      setState(() { _isLoading = false; _hasError = false; });
-    } else if (controller.value.isInitialized && !controller.value.isPlaying && !controller.value.hasError) {
-      setState(() { _isLoading = true; _hasError = false; });
+    final hasError = controller.value.hasError;
+    final isBuffering = controller.value.isBuffering;
+
+    if (hasError) {
+      setState(() {
+        _hasError = true;
+        _isLoading = false;
+        _errorMsg = controller.value.errorDescription ?? '播放错误（可能是编码/协议不兼容）';
+      });
+      return;
     }
+
+    if (_isLoading != isBuffering) {
+      setState(() {
+        _isLoading = isBuffering;
+        _hasError = false;
+      });
+    }
+  }
+
+  void _handleStartupTimeout(VideoPlayerController target) {
+    if (!mounted || _controller != target || _hasError) {
+      return;
+    }
+
+    final stillLoading = _isLoading || target.value.isBuffering;
+    if (!stillLoading || _isRecovering) {
+      return;
+    }
+
+    if (!_useFlv) {
+      _isRecovering = true;
+      _useFlv = true;
+      _startPlay().whenComplete(() {
+        _isRecovering = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _hasError = true;
+      _isLoading = false;
+      _errorMsg = 'HLS/FLV 都未成功出画面。\n'
+          '请检查：\n'
+          '1) SRS 是否持续产生 camera.m3u8 与 ts 分片；\n'
+          '2) 推流是否有关键帧（建议固定 GOP=25）；\n'
+          '3) 手机解码是否支持当前 H264 编码参数。';
+    });
   }
 
   void switchProtocol() {
     _useFlv = !_useFlv;
-    _startPlay();
+    unawaited(_startPlay());
   }
 
   @override
@@ -98,21 +165,22 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBinding
       if (controller.value.isPlaying) {
         controller.pause();
       }
-      WakelockPlus.disable();
+      unawaited(WakelockPlus.disable());
     } else if (state == AppLifecycleState.resumed) {
       if (controller.value.isInitialized) {
         controller.play();
       }
-      WakelockPlus.enable();
+      unawaited(WakelockPlus.enable());
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _startupTimer?.cancel();
     _controller?.removeListener(_playerListener);
     _controller?.dispose();
-    WakelockPlus.disable();
+    unawaited(WakelockPlus.disable());
     super.dispose();
   }
 
@@ -132,26 +200,41 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBinding
           else
             Container(color: Colors.black),
           if (_isLoading)
-            Container(color: Colors.black45, child: const Center(child: CircularProgressIndicator(color: Colors.white))),
+            Container(
+              color: Colors.black45,
+              child: const Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            ),
           if (_hasError)
             Container(
               color: Colors.black87,
               padding: const EdgeInsets.all(12),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.videocam_off, color: Colors.red, size: 36),
-                const SizedBox(height: 8),
-                Text(_errorMsg, style: const TextStyle(color: Colors.white70)),
-                const SizedBox(height: 8),
-                ElevatedButton(onPressed: _startPlay, child: const Text('重试')),
-              ]),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.videocam_off, color: Colors.red, size: 36),
+                  const SizedBox(height: 8),
+                  Text(_errorMsg, style: const TextStyle(color: Colors.white70)),
+                  const SizedBox(height: 8),
+                  ElevatedButton(onPressed: _startPlay, child: const Text('重试')),
+                ],
+              ),
             ),
           Positioned(
             right: 8,
             top: 8,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.black54, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6), minimumSize: Size.zero),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.black54,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                minimumSize: Size.zero,
+              ),
               onPressed: switchProtocol,
-              child: Text(_useFlv ? 'FLV' : 'HLS', style: const TextStyle(fontSize: 12)),
+              child: Text(
+                _useFlv ? 'FLV' : 'HLS',
+                style: const TextStyle(fontSize: 12),
+              ),
             ),
           ),
         ],
