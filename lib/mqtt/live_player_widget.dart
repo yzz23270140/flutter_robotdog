@@ -13,8 +13,8 @@ class LivePlayerWidget extends StatefulWidget {
 }
 
 class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBindingObserver {
-  late VideoPlayerController _controller;
-  bool _useFlv = true;
+  VideoPlayerController? _controller;
+  bool _useFlv = false;
   bool _isLoading = true;
   bool _hasError = false;
   String _errorMsg = '';
@@ -38,34 +38,47 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBinding
   Future<void> _startPlay() async {
     setState(() { _isLoading = true; _hasError = false; });
     try {
-      // 释放之前的控制器
-      if (_controller.value.isInitialized) {
-        await _controller.dispose();
+      final oldController = _controller;
+      if (oldController != null) {
+        oldController.removeListener(_playerListener);
+        await oldController.dispose();
       }
       
       final url = _useFlv ? _flvUrl : _hlsUrl;
-      _controller = VideoPlayerController.networkUrl(
+      final nextController = VideoPlayerController.networkUrl(
         Uri.parse(url),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
+      _controller = nextController;
       
       // 添加监听器
-      _controller.addListener(_playerListener);
+      nextController.addListener(_playerListener);
       
       // 初始化并自动播放
-      await _controller.initialize();
-      await _controller.play();
+      await nextController.initialize();
+      if (!mounted || _controller != nextController) {
+        return;
+      }
+      await nextController.play();
     } catch (e) {
-      setState(() { _hasError = true; _isLoading = false; _errorMsg = '连接失败: $e'; });
+      if (!mounted) return;
+      setState(() {
+        _hasError = true;
+        _isLoading = false;
+        _errorMsg = '连接失败: $e\n建议先用 HLS（m3u8），FLV 在 video_player 上兼容性较差。';
+      });
     }
   }
 
   void _playerListener() {
-    if (_controller.value.hasError) {
+    final controller = _controller;
+    if (controller == null || !mounted) return;
+
+    if (controller.value.hasError) {
       setState(() { _hasError = true; _isLoading = false; _errorMsg = '播放错误'; });
-    } else if (_controller.value.isPlaying) {
+    } else if (controller.value.isPlaying) {
       setState(() { _isLoading = false; _hasError = false; });
-    } else if (_controller.value.isInitialized && !_controller.value.isPlaying && !_controller.value.hasError) {
+    } else if (controller.value.isInitialized && !controller.value.isPlaying && !controller.value.hasError) {
       setState(() { _isLoading = true; _hasError = false; });
     }
   }
@@ -78,14 +91,17 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBinding
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    final controller = _controller;
+    if (controller == null) return;
+
     if (state == AppLifecycleState.paused) {
-      if (_controller.value.isPlaying) {
-        _controller.pause();
+      if (controller.value.isPlaying) {
+        controller.pause();
       }
       WakelockPlus.disable();
     } else if (state == AppLifecycleState.resumed) {
-      if (_controller.value.isInitialized) {
-        _controller.play();
+      if (controller.value.isInitialized) {
+        controller.play();
       }
       WakelockPlus.enable();
     }
@@ -94,8 +110,8 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBinding
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller.removeListener(_playerListener);
-    _controller.dispose();
+    _controller?.removeListener(_playerListener);
+    _controller?.dispose();
     WakelockPlus.disable();
     super.dispose();
   }
@@ -108,10 +124,10 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget> with WidgetsBinding
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (_controller.value.isInitialized)
+          if (_controller?.value.isInitialized ?? false)
             AspectRatio(
-              aspectRatio: _controller.value.aspectRatio,
-              child: VideoPlayer(_controller),
+              aspectRatio: _controller?.value.aspectRatio ?? (16 / 9),
+              child: VideoPlayer(_controller!),
             )
           else
             Container(color: Colors.black),
