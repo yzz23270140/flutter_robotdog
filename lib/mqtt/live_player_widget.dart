@@ -29,10 +29,13 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
   bool _isLoading = true;
   bool _hasError = false;
   bool _isRecovering = false;
+  int _retryCount = 0;
   String _errorMsg = '';
 
-  String get _flvUrl => 'http://${widget.serverIp}:8080/live/camera.flv';
-  String get _hlsUrl => 'http://${widget.serverIp}:8080/live/camera.m3u8';
+  String get _flvUrl =>
+      'http://${widget.serverIp}:8080/live/camera.flv';
+  String get _hlsUrl =>
+      'http://${widget.serverIp}:8080/live/camera.m3u8?_t=${DateTime.now().millisecondsSinceEpoch}';
 
   @override
   void initState() {
@@ -84,6 +87,7 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
       setState(() {
         _isLoading = false;
       });
+      _retryCount = 0;
 
       _startupTimer = Timer(const Duration(seconds: 6), () {
         _handleStartupTimeout(nextController);
@@ -110,10 +114,17 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
     }
 
     if (hasError) {
+      final detail = controller.value.errorDescription ?? '播放错误（可能是编码/协议不兼容）';
+      if (detail.contains('404') && _retryCount < 2) {
+        _retryCount += 1;
+        _startupTimer?.cancel();
+        unawaited(_startPlay());
+        return;
+      }
       setState(() {
         _hasError = true;
         _isLoading = false;
-        _errorMsg = controller.value.errorDescription ?? '播放错误（可能是编码/协议不兼容）';
+        _errorMsg = detail;
       });
       return;
     }
@@ -158,6 +169,7 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
   }
 
   void switchProtocol() {
+    _retryCount = 0;
     _useFlv = !_useFlv;
     unawaited(_startPlay());
   }
@@ -217,15 +229,23 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
             Container(
               color: Colors.black87,
               padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.videocam_off, color: Colors.red, size: 36),
-                  const SizedBox(height: 8),
-                  Text(_errorMsg, style: const TextStyle(color: Colors.white70)),
-                  const SizedBox(height: 8),
-                  ElevatedButton(onPressed: _startPlay, child: const Text('重试')),
-                ],
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.videocam_off, color: Colors.red, size: 32),
+                    const SizedBox(height: 6),
+                    Text(
+                      _errorMsg,
+                      style: const TextStyle(color: Colors.white70),
+                      textAlign: TextAlign.center,
+                      maxLines: 6,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton(onPressed: _startPlay, child: const Text('重试')),
+                  ],
+                ),
               ),
             ),
           Positioned(
