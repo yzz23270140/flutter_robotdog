@@ -33,7 +33,7 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
   String _errorMsg = '';
 
   String get _flvUrl =>
-      'http://${widget.serverIp}:8080/live/camera.flv';
+      'http://${widget.serverIp}:8081/live/camera.flv';
   String get _hlsUrl =>
       'http://${widget.serverIp}:8080/live/camera.m3u8?_t=${DateTime.now().millisecondsSinceEpoch}';
 
@@ -162,9 +162,9 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
       _isLoading = false;
       _errorMsg = 'HLS/FLV 都未成功出画面。\n'
           '请检查：\n'
-          '1) SRS 是否持续产生 camera.m3u8 与 ts 分片；\n'
-          '2) 推流命令不要用 copy，改为 libx264 + GOP=25 + yuv420p；\n'
-          '3) 手机解码是否支持当前 H264 编码参数（Baseline/Main）。';
+          '1) HLS 走 Nginx 8080，是否持续产生 camera.m3u8 与 ts 分片；\n'
+          '2) HTTP-FLV 走 SRS 8081，URL 是否可在 VLC 打开；\n'
+          '3) 推流建议 libx264 + GOP=25 + yuv420p，避免 ExoPlayer 解复用错误。';
     });
   }
 
