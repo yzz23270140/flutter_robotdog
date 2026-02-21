@@ -23,6 +23,7 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
     with WidgetsBindingObserver {
   VideoPlayerController? _controller;
   Timer? _startupTimer;
+  Duration _lastPosition = Duration.zero;
 
   bool _useFlv = false;
   bool _isLoading = true;
@@ -69,6 +70,7 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
       );
 
       _controller = nextController;
+      _lastPosition = Duration.zero;
       nextController.addListener(_playerListener);
 
       await nextController.initialize();
@@ -83,7 +85,7 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
         _isLoading = false;
       });
 
-      _startupTimer = Timer(const Duration(seconds: 10), () {
+      _startupTimer = Timer(const Duration(seconds: 6), () {
         _handleStartupTimeout(nextController);
       });
     } catch (e) {
@@ -102,6 +104,10 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
 
     final hasError = controller.value.hasError;
     final isBuffering = controller.value.isBuffering;
+    final position = controller.value.position;
+    if (position > _lastPosition) {
+      _lastPosition = position;
+    }
 
     if (hasError) {
       setState(() {
@@ -125,7 +131,8 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
       return;
     }
 
-    final stillLoading = _isLoading || target.value.isBuffering;
+    final noFrameProgress = _lastPosition <= Duration.zero;
+    final stillLoading = _isLoading || target.value.isBuffering || noFrameProgress;
     if (!stillLoading || _isRecovering) {
       return;
     }
@@ -145,8 +152,8 @@ class _LivePlayerWidgetState extends State<LivePlayerWidget>
       _errorMsg = 'HLS/FLV 都未成功出画面。\n'
           '请检查：\n'
           '1) SRS 是否持续产生 camera.m3u8 与 ts 分片；\n'
-          '2) 推流是否有关键帧（建议固定 GOP=25）；\n'
-          '3) 手机解码是否支持当前 H264 编码参数。';
+          '2) 推流命令不要用 copy，改为 libx264 + GOP=25 + yuv420p；\n'
+          '3) 手机解码是否支持当前 H264 编码参数（Baseline/Main）。';
     });
   }
 

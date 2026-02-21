@@ -327,51 +327,53 @@ class SensorPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // 气体浓度 + 光照强度保持并排
-                Row(
-                  children: [
-                    Expanded(
-                      child: AspectRatio(
-                        aspectRatio: 1.2,
-                        child: _SensorCard(
-                          title: '一氧化碳气体浓度',
-                          value: '${data["co"]}',
-                          unit: 'ppm³',
-                          icon: Icons.cloud_rounded,
-                          gradient: const [
-                            Color(0xFFAED581),
-                            Color(0xFF689F38)
-                          ],
-                          bgColor: const Color(0xFFF1F8E9),
-                          minVal: 0,
-                          maxVal: 100,
-                          minLabel: '0ppm',
-                          maxLabel: '100ppm',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: AspectRatio(
-                        aspectRatio: 1.2,
-                        child: _SensorCard(
-                          title: '有机挥发性气体',
-                          value: '${data["tvoc"]}',
-                          unit: 'ug/m³',
-                          icon: Icons.wb_sunny_rounded,
-                          gradient: const [
-                            Color(0xFFFFD54F),
-                            Color(0xFFF9A825)
-                          ],
-                          bgColor: const Color(0xFFFFFDE7),
-                          minVal: 0,
-                          maxVal: 1000,
-                          minLabel: '0 ug/m³',
-                          maxLabel: '10000 ug/m³',
-                        ),
-                      ),
-                    ),
-                  ],
+                // 气体浓度 + TVOC：大屏并排，小屏自动换行，避免卡片内部溢出
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isCompact = constraints.maxWidth < 720;
+                    final coCard = _SensorCard(
+                      title: '一氧化碳气体浓度',
+                      value: '${data["co"]}',
+                      unit: 'ppm',
+                      icon: Icons.cloud_rounded,
+                      gradient: const [Color(0xFFAED581), Color(0xFF689F38)],
+                      bgColor: const Color(0xFFF1F8E9),
+                      minVal: 0,
+                      maxVal: 100,
+                      minLabel: '0ppm',
+                      maxLabel: '100ppm',
+                    );
+                    final tvocCard = _SensorCard(
+                      title: '有机挥发性气体',
+                      value: '${data["tvoc"]}',
+                      unit: 'μg/m³',
+                      icon: Icons.wb_sunny_rounded,
+                      gradient: const [Color(0xFFFFD54F), Color(0xFFF9A825)],
+                      bgColor: const Color(0xFFFFFDE7),
+                      minVal: 0,
+                      maxVal: 10000,
+                      minLabel: '0μg/m³',
+                      maxLabel: '10000μg/m³',
+                    );
+
+                    if (isCompact) {
+                      return Column(
+                        children: [
+                          coCard,
+                          const SizedBox(height: 12),
+                          tvocCard,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: coCard),
+                        const SizedBox(width: 12),
+                        Expanded(child: tvocCard),
+                      ],
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 20),
@@ -466,6 +468,8 @@ class _SensorCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],
