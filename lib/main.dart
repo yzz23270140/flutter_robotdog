@@ -29,6 +29,46 @@ class MyApp extends StatelessWidget {
   }
 }
 
+
+class _AppBarTitle extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _AppBarTitle({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+            const TextSpan(text: '  '),
+            TextSpan(
+              text: subtitle,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
 /* ================== 首页 ================== */
 
 class HomePage extends StatefulWidget {
@@ -203,29 +243,9 @@ class SensorPage extends StatelessWidget {
           pinned: true,
           backgroundColor: const Color(0xFF4CAF50),
           flexibleSpace: FlexibleSpaceBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: const [
-                Text(
-                  'RobotDog助手',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  '环境监测面板',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13, // 放大，原来是 12
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
+            title: const _AppBarTitle(
+              title: 'RobotDog助手',
+              subtitle: '环境监测面板',
             ),
             background: Container(
               decoration: const BoxDecoration(
@@ -784,29 +804,9 @@ class CameraPage extends StatelessWidget {
           pinned: true,
           backgroundColor: const Color(0xFF4CAF50),
           flexibleSpace: FlexibleSpaceBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: const [
-                Text(
-                  'RobotDog助手',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  '远程监控',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
+            title: const _AppBarTitle(
+              title: 'RobotDog助手',
+              subtitle: '远程监控',
             ),
             background: Container(
               decoration: const BoxDecoration(
@@ -1007,29 +1007,9 @@ class AlertPage extends StatelessWidget {
           pinned: true,
           backgroundColor: const Color(0xFF4CAF50),
           flexibleSpace: FlexibleSpaceBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: const [
-                Text(
-                  'Little助手',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  '安全监控',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
+            title: const _AppBarTitle(
+              title: 'Little助手',
+              subtitle: '安全监控',
             ),
             background: Container(
               decoration: const BoxDecoration(
