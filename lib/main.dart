@@ -136,6 +136,7 @@ class _HomePageState extends State<HomePage> {
         data: _latestData,
         isConnected: _isConnected,
         lastUpdate: _lastUpdate,
+        thresholds: _thresholds,
       ),
       const CameraPage(),
       AlertPage(
@@ -217,11 +218,13 @@ class SensorPage extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool isConnected;
   final DateTime? lastUpdate;
+  final Map<String, Map<String, double>> thresholds;
 
   const SensorPage({
     super.key,
     required this.data,
     required this.isConnected,
+    required this.thresholds,
     this.lastUpdate,
   });
 
@@ -327,6 +330,8 @@ class SensorPage extends StatelessWidget {
                   bgColor: const Color(0xFFFFF3E0),
                   minVal: -10,
                   maxVal: 50,
+                  warningHigh: thresholds['temperature']?['warningHigh'],
+                  dangerHigh: thresholds['temperature']?['dangerHigh'],
                   minLabel: '-10°C',
                   maxLabel: '50°C',
                 ),
@@ -342,6 +347,8 @@ class SensorPage extends StatelessWidget {
                   bgColor: const Color(0xFFE1F5FE),
                   minVal: 0,
                   maxVal: 100,
+                  warningHigh: thresholds['humidity']?['warningHigh'],
+                  dangerHigh: thresholds['humidity']?['dangerHigh'],
                   minLabel: '0%',
                   maxLabel: '100%',
                 ),
@@ -360,6 +367,8 @@ class SensorPage extends StatelessWidget {
                       bgColor: const Color(0xFFF1F8E9),
                       minVal: 0,
                       maxVal: 100,
+                      warningHigh: thresholds['co']?['warningHigh'],
+                      dangerHigh: thresholds['co']?['dangerHigh'],
                       minLabel: '0ppm',
                       maxLabel: '100ppm',
                     );
@@ -372,6 +381,8 @@ class SensorPage extends StatelessWidget {
                       bgColor: const Color(0xFFFFFDE7),
                       minVal: 0,
                       maxVal: 10000,
+                      warningHigh: thresholds['tvoc']?['warningHigh'],
+                      dangerHigh: thresholds['tvoc']?['dangerHigh'],
                       minLabel: '0μg/m³',
                       maxLabel: '10000μg/m³',
                     );
@@ -421,6 +432,8 @@ class _SensorCard extends StatelessWidget {
   final double maxVal;
   final String minLabel;
   final String maxLabel;
+  final double? warningHigh;
+  final double? dangerHigh;
 
   const _SensorCard({
     required this.title,
@@ -433,6 +446,8 @@ class _SensorCard extends StatelessWidget {
     this.maxVal = 100,
     this.minLabel = '0',
     this.maxLabel = '100',
+    this.warningHigh,
+    this.dangerHigh,
   });
 
   @override
@@ -443,14 +458,17 @@ class _SensorCard extends StatelessWidget {
       progress = ((numericValue - minVal) / (maxVal - minVal)).clamp(0.0, 1.0);
     }
 
+    final warning = warningHigh;
+    final danger = dangerHigh;
+
     Color statusColor = gradient[1];
     String statusText = '正常';
-    if (progress > 0.8) {
+    if (numericValue != null && danger != null && numericValue >= danger) {
       statusColor = Colors.red;
-      statusText = '偏高';
-    } else if (progress > 0.6) {
+      statusText = '告警';
+    } else if (numericValue != null && warning != null && numericValue >= warning) {
       statusColor = Colors.orange;
-      statusText = '注意';
+      statusText = '提醒';
     } else if (progress < 0.2 && numericValue != null) {
       statusColor = const Color(0xFF2196F3);
       statusText = '偏低';
@@ -459,6 +477,7 @@ class _SensorCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
+        border: Border.all(color: gradient[0].withOpacity(0.12)),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -561,7 +580,7 @@ class _SensorCard extends StatelessWidget {
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: progress > 0.8
+                            colors: ((danger != null && numericValue != null && numericValue >= danger) || progress > 0.8)
                                 ? [Colors.orange, Colors.red]
                                 : gradient,
                           ),
@@ -579,7 +598,16 @@ class _SensorCard extends StatelessWidget {
               children: [
                 Text(minLabel,
                     style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                if (numericValue != null)
+                if (warning != null && danger != null)
+                  Text(
+                    '提醒 ${warning.toStringAsFixed(0)}  告警 ${danger.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else if (numericValue != null)
                   Text(
                     '${(progress * 100).toInt()}%',
                     style: TextStyle(
