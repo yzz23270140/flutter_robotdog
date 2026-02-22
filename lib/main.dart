@@ -29,6 +29,46 @@ class MyApp extends StatelessWidget {
   }
 }
 
+
+class _AppBarTitle extends StatelessWidget {
+  final String title;
+  final String subtitle;
+
+  const _AppBarTitle({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+              ),
+            ),
+            const TextSpan(text: '  '),
+            TextSpan(
+              text: subtitle,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
 /* ================== 首页 ================== */
 
 class HomePage extends StatefulWidget {
@@ -96,6 +136,7 @@ class _HomePageState extends State<HomePage> {
         data: _latestData,
         isConnected: _isConnected,
         lastUpdate: _lastUpdate,
+        thresholds: _thresholds,
       ),
       const CameraPage(),
       AlertPage(
@@ -177,11 +218,13 @@ class SensorPage extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool isConnected;
   final DateTime? lastUpdate;
+  final Map<String, Map<String, double>> thresholds;
 
   const SensorPage({
     super.key,
     required this.data,
     required this.isConnected,
+    required this.thresholds,
     this.lastUpdate,
   });
 
@@ -203,29 +246,9 @@ class SensorPage extends StatelessWidget {
           pinned: true,
           backgroundColor: const Color(0xFF4CAF50),
           flexibleSpace: FlexibleSpaceBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: const [
-                Text(
-                  'RobotDog助手',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  '环境监测面板',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13, // 放大，原来是 12
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
+            title: const _AppBarTitle(
+              title: 'RobotDog助手',
+              subtitle: '环境监测面板',
             ),
             background: Container(
               decoration: const BoxDecoration(
@@ -307,6 +330,8 @@ class SensorPage extends StatelessWidget {
                   bgColor: const Color(0xFFFFF3E0),
                   minVal: -10,
                   maxVal: 50,
+                  warningHigh: thresholds['temperature']?['warningHigh'],
+                  dangerHigh: thresholds['temperature']?['dangerHigh'],
                   minLabel: '-10°C',
                   maxLabel: '50°C',
                 ),
@@ -322,56 +347,64 @@ class SensorPage extends StatelessWidget {
                   bgColor: const Color(0xFFE1F5FE),
                   minVal: 0,
                   maxVal: 100,
+                  warningHigh: thresholds['humidity']?['warningHigh'],
+                  dangerHigh: thresholds['humidity']?['dangerHigh'],
                   minLabel: '0%',
                   maxLabel: '100%',
                 ),
                 const SizedBox(height: 12),
 
-                // 气体浓度 + 光照强度保持并排
-                Row(
-                  children: [
-                    Expanded(
-                      child: AspectRatio(
-                        aspectRatio: 1.2,
-                        child: _SensorCard(
-                          title: '一氧化碳气体浓度',
-                          value: '${data["co"]}',
-                          unit: 'ppm³',
-                          icon: Icons.cloud_rounded,
-                          gradient: const [
-                            Color(0xFFAED581),
-                            Color(0xFF689F38)
-                          ],
-                          bgColor: const Color(0xFFF1F8E9),
-                          minVal: 0,
-                          maxVal: 100,
-                          minLabel: '0ppm',
-                          maxLabel: '100ppm',
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: AspectRatio(
-                        aspectRatio: 1.2,
-                        child: _SensorCard(
-                          title: '有机挥发性气体',
-                          value: '${data["tvoc"]}',
-                          unit: 'ug/m³',
-                          icon: Icons.wb_sunny_rounded,
-                          gradient: const [
-                            Color(0xFFFFD54F),
-                            Color(0xFFF9A825)
-                          ],
-                          bgColor: const Color(0xFFFFFDE7),
-                          minVal: 0,
-                          maxVal: 1000,
-                          minLabel: '0 ug/m³',
-                          maxLabel: '10000 ug/m³',
-                        ),
-                      ),
-                    ),
-                  ],
+                // 气体浓度 + TVOC：大屏并排，小屏自动换行，避免卡片内部溢出
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isCompact = constraints.maxWidth < 720;
+                    final coCard = _SensorCard(
+                      title: '一氧化碳气体浓度',
+                      value: '${data["co"]}',
+                      unit: 'ppm',
+                      icon: Icons.cloud_rounded,
+                      gradient: const [Color(0xFFAED581), Color(0xFF689F38)],
+                      bgColor: const Color(0xFFF1F8E9),
+                      minVal: 0,
+                      maxVal: 100,
+                      warningHigh: thresholds['co']?['warningHigh'],
+                      dangerHigh: thresholds['co']?['dangerHigh'],
+                      minLabel: '0ppm',
+                      maxLabel: '100ppm',
+                    );
+                    final tvocCard = _SensorCard(
+                      title: '有机挥发性气体',
+                      value: '${data["tvoc"]}',
+                      unit: 'μg/m³',
+                      icon: Icons.wb_sunny_rounded,
+                      gradient: const [Color(0xFFFFD54F), Color(0xFFF9A825)],
+                      bgColor: const Color(0xFFFFFDE7),
+                      minVal: 0,
+                      maxVal: 10000,
+                      warningHigh: thresholds['tvoc']?['warningHigh'],
+                      dangerHigh: thresholds['tvoc']?['dangerHigh'],
+                      minLabel: '0μg/m³',
+                      maxLabel: '10000μg/m³',
+                    );
+
+                    if (isCompact) {
+                      return Column(
+                        children: [
+                          coCard,
+                          const SizedBox(height: 12),
+                          tvocCard,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: coCard),
+                        const SizedBox(width: 12),
+                        Expanded(child: tvocCard),
+                      ],
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 20),
@@ -399,6 +432,8 @@ class _SensorCard extends StatelessWidget {
   final double maxVal;
   final String minLabel;
   final String maxLabel;
+  final double? warningHigh;
+  final double? dangerHigh;
 
   const _SensorCard({
     required this.title,
@@ -411,6 +446,8 @@ class _SensorCard extends StatelessWidget {
     this.maxVal = 100,
     this.minLabel = '0',
     this.maxLabel = '100',
+    this.warningHigh,
+    this.dangerHigh,
   });
 
   @override
@@ -421,14 +458,17 @@ class _SensorCard extends StatelessWidget {
       progress = ((numericValue - minVal) / (maxVal - minVal)).clamp(0.0, 1.0);
     }
 
+    final warning = warningHigh;
+    final danger = dangerHigh;
+
     Color statusColor = gradient[1];
     String statusText = '正常';
-    if (progress > 0.8) {
+    if (numericValue != null && danger != null && numericValue >= danger) {
       statusColor = Colors.red;
-      statusText = '偏高';
-    } else if (progress > 0.6) {
+      statusText = '告警';
+    } else if (numericValue != null && warning != null && numericValue >= warning) {
       statusColor = Colors.orange;
-      statusText = '注意';
+      statusText = '提醒';
     } else if (progress < 0.2 && numericValue != null) {
       statusColor = const Color(0xFF2196F3);
       statusText = '偏低';
@@ -437,6 +477,7 @@ class _SensorCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
+        border: Border.all(color: gradient[0].withOpacity(0.12)),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -466,6 +507,8 @@ class _SensorCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey[700],
@@ -537,7 +580,7 @@ class _SensorCard extends StatelessWidget {
                       child: Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
-                            colors: progress > 0.8
+                            colors: ((danger != null && numericValue != null && numericValue >= danger) || progress > 0.8)
                                 ? [Colors.orange, Colors.red]
                                 : gradient,
                           ),
@@ -555,7 +598,16 @@ class _SensorCard extends StatelessWidget {
               children: [
                 Text(minLabel,
                     style: TextStyle(fontSize: 10, color: Colors.grey[400])),
-                if (numericValue != null)
+                if (warning != null && danger != null)
+                  Text(
+                    '提醒 ${warning.toStringAsFixed(0)}  告警 ${danger.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[500],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  )
+                else if (numericValue != null)
                   Text(
                     '${(progress * 100).toInt()}%',
                     style: TextStyle(
@@ -780,29 +832,9 @@ class CameraPage extends StatelessWidget {
           pinned: true,
           backgroundColor: const Color(0xFF4CAF50),
           flexibleSpace: FlexibleSpaceBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: const [
-                Text(
-                  'RobotDog助手',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  '远程监控',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
+            title: const _AppBarTitle(
+              title: 'RobotDog助手',
+              subtitle: '远程监控',
             ),
             background: Container(
               decoration: const BoxDecoration(
@@ -1003,29 +1035,9 @@ class AlertPage extends StatelessWidget {
           pinned: true,
           backgroundColor: const Color(0xFF4CAF50),
           flexibleSpace: FlexibleSpaceBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: const [
-                Text(
-                  'Little助手',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
-                ),
-                SizedBox(width: 8),
-                Text(
-                  '安全监控',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ],
+            title: const _AppBarTitle(
+              title: 'Little助手',
+              subtitle: '安全监控',
             ),
             background: Container(
               decoration: const BoxDecoration(
